@@ -1,0 +1,17 @@
+{
+  "short_name": "Device Duel",
+  "name": "Device Duel: Tech Comparison Engine",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "description": "A web application that provides a detailed, side-by-side comparison of two devices, including pros, cons, and a summary. Users can also ask follow-up questions through an integrated chat."
+}

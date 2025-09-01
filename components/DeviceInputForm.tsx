@@ -30,27 +30,29 @@ const DeviceInputForm: React.FC<DeviceInputFormProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto p-6 bg-slate-800 rounded-2xl shadow-2xl shadow-slate-950/50 border border-slate-700">
-      <form onSubmit={handleSubmit} className="flex flex-col md:flex-row items-center gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col md:flex-row items-center gap-4" aria-busy={isLoading}>
         <div className="relative w-full">
-            <CpuChipIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <CpuChipIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
             <input
                 type="text"
                 value={deviceOne}
                 onChange={(e) => setDeviceOne(e.target.value)}
                 placeholder="e.g., iPhone 15 Pro"
                 disabled={isLoading}
+                aria-label="First device name"
                 className="w-full pl-10 pr-4 py-3 bg-slate-700 text-slate-100 rounded-lg border-2 border-slate-600 focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 outline-none transition duration-200"
             />
         </div>
-        <div className="text-slate-400 font-bold text-lg">VS</div>
+        <div className="text-slate-400 font-bold text-lg" aria-hidden="true">VS</div>
         <div className="relative w-full">
-             <CpuChipIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+             <CpuChipIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true" />
             <input
                 type="text"
                 value={deviceTwo}
                 onChange={(e) => setDeviceTwo(e.target.value)}
                 placeholder="e.g., Google Pixel 8 Pro"
                 disabled={isLoading}
+                aria-label="Second device name"
                 className="w-full pl-10 pr-4 py-3 bg-slate-700 text-slate-100 rounded-lg border-2 border-slate-600 focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 outline-none transition duration-200"
             />
         </div>
