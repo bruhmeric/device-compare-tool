@@ -1,0 +1,5 @@
+{
+  "name": "Device Duel: Tech Comparison Engine",
+  "description": "A web application that provides a detailed, side-by-side comparison of two devices, including pros, cons, and a summary. Users can also ask follow-up questions through an integrated chat.",
+  "requestFramePermissions": []
+}
