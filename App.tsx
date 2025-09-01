@@ -1,14 +1,13 @@
 
 import React from 'react';
 import { useState } from 'react';
-import { getDeviceComparison, startChatSession } from './services/geminiService';
+import { getDeviceComparison, getChatStreamReader } from './services/geminiService';
 import DeviceInputForm from './components/DeviceInputForm';
 import ComparisonResultDisplay from './components/ComparisonResult';
 import ChatInterface from './components/ChatInterface';
 import Loader from './components/Loader';
 import { CpuChipIcon } from './components/Icons';
 import type { ComparisonResult, ChatState, ChatMessage } from './types';
-import type { Chat } from '@google/genai';
 
 const App: React.FC = () => {
   const [deviceOne, setDeviceOne] = useState<string>('');
@@ -16,21 +15,19 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [comparisonResult, setComparisonResult] = useState<ComparisonResult | null>(null);
-  const [chatState, setChatState] = useState<ChatState>({ instance: null, history: [], isTyping: false });
+  const [chatState, setChatState] = useState<Omit<ChatState, 'instance'>>({ history: [], isTyping: false });
 
   const handleCompare = async () => {
     setIsLoading(true);
     setError(null);
     setComparisonResult(null);
-    setChatState({ instance: null, history: [], isTyping: false });
+    setChatState({ history: [], isTyping: false });
 
     try {
       const result = await getDeviceComparison(deviceOne, deviceTwo);
       setComparisonResult(result);
 
-      const chatInstance = startChatSession(result.deviceOne.name, result.deviceTwo.name);
       setChatState({
-        instance: chatInstance,
         history: [{ role: 'assistant', content: `Hi there! I've just compared the ${result.deviceOne.name} and ${result.deviceTwo.name}. Feel free to ask me any questions.` }],
         isTyping: false,
       });
@@ -42,32 +39,62 @@ const App: React.FC = () => {
     }
   };
   
+  // FIX: Refactored handleSendMessage to fix type errors and streaming logic.
   const handleSendMessage = async (message: string) => {
-    if (!chatState.instance) return;
+    if (!comparisonResult) return;
 
-    const updatedHistory: ChatMessage[] = [...chatState.history, { role: 'user', content: message }];
-    setChatState(prev => ({ ...prev, history: updatedHistory, isTyping: true }));
+    const userMessage: ChatMessage = { role: 'user', content: message };
+    const assistantPlaceholder: ChatMessage = { role: 'assistant', content: '' };
+    
+    // The history sent to the API should not include the latest user message or placeholder
+    const historyForApi = chatState.history;
+
+    setChatState(prev => ({
+        ...prev,
+        history: [...prev.history, userMessage, assistantPlaceholder],
+        isTyping: true,
+    }));
 
     try {
-        const stream = await chatState.instance.sendMessageStream({ message });
+        const reader = await getChatStreamReader(
+            historyForApi, 
+            message, 
+            comparisonResult.deviceOne.name, 
+            comparisonResult.deviceTwo.name
+        );
         
+        const decoder = new TextDecoder();
         let assistantResponse = '';
-        for await (const chunk of stream) {
-            assistantResponse += chunk.text;
-            // To avoid too many re-renders, you might update less frequently
-            // For this app, updating per chunk is fine for a live effect.
-            setChatState(prev => ({
-                ...prev,
-                history: [...updatedHistory, { role: 'assistant', content: assistantResponse }]
-            }));
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            assistantResponse += decoder.decode(value, { stream: true });
+            
+            // Update the last message in the history (the assistant's placeholder)
+            setChatState(prev => {
+                const newHistory = [...prev.history];
+                if (newHistory.length > 0) {
+                    newHistory[newHistory.length - 1] = {
+                        ...newHistory[newHistory.length - 1],
+                        content: assistantResponse,
+                    };
+                }
+                return { ...prev, history: newHistory };
+            });
         }
 
     } catch (err) {
         console.error("Chat error:", err);
-        const errorMsg = { role: 'assistant', content: "Sorry, I encountered an error. Please try again." } as ChatMessage;
-        setChatState(prev => ({ ...prev, history: [...updatedHistory, errorMsg] }));
+        const errorMsg: ChatMessage = { role: 'assistant', content: "Sorry, I encountered an error. Please try again." };
+        // Replace the placeholder with an error message
+        setChatState(prev => {
+            const historyWithoutPlaceholder = prev.history.slice(0, -1);
+            return { ...prev, history: [...historyWithoutPlaceholder, errorMsg] };
+        });
     } finally {
-        setChatState(prev => ({...prev, isTyping: false}));
+        setChatState(prev => ({ ...prev, isTyping: false }));
     }
   };
 

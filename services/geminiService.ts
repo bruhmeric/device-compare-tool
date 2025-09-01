@@ -1,108 +1,46 @@
-import { GoogleGenAI, Type, Chat } from "@google/genai";
-import type { ComparisonResult } from '../types';
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set");
-}
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-const ratingSchema = {
-    type: Type.OBJECT,
-    properties: {
-        overall: { type: Type.NUMBER, description: "Overall score out of 10. Can be a float." },
-        performance: { type: Type.NUMBER, description: "Performance score out of 10. Can be a float." },
-        camera: { type: Type.NUMBER, description: "Camera score out of 10. Can be a float." },
-        battery: { type: Type.NUMBER, description: "Battery life score out of 10. Can be a float." },
-        display: { type: Type.NUMBER, description: "Display quality score out of 10. Can be a float." },
-        value: { type: Type.NUMBER, description: "Value for money score out of 10. Can be a float." },
-    },
-    required: ["overall", "performance", "camera", "battery", "display", "value"]
-};
-
-const comparisonSchema = {
-  type: Type.OBJECT,
-  properties: {
-    detailedSummary: {
-        type: Type.OBJECT,
-        properties: {
-            overview: { type: Type.STRING, description: "A brief overall summary of the comparison, about 2-3 sentences." },
-            keyDifferences: { type: Type.ARRAY, items: { type: Type.STRING }, description: "A list of 2-3 main differentiating factors." },
-            bestForDeviceOne: { type: Type.STRING, description: "Describe the ideal user for the first device in one sentence." },
-            bestForDeviceTwo: { type: Type.STRING, description: "Describe the ideal user for the second device in one sentence." },
-        },
-        required: ["overview", "keyDifferences", "bestForDeviceOne", "bestForDeviceTwo"]
-    },
-    winner: { type: Type.STRING, description: "The name of the winning device. If it's a tie, state 'It's a tie'." },
-    winnerReason: { type: Type.STRING, description: "A short reason for the winner or why it's a tie." },
-    deviceOne: {
-      type: Type.OBJECT,
-      properties: {
-        name: { type: Type.STRING, description: "The full, corrected name of the first device." },
-        pros: { type: Type.ARRAY, items: { type: Type.STRING }, description: "A list of 3-5 key pros for this device." },
-        cons: { type: Type.ARRAY, items: { type: Type.STRING }, description: "A list of 3-5 key cons for this device." },
-        rating: ratingSchema
-      },
-      required: ["name", "pros", "cons", "rating"]
-    },
-    deviceTwo: {
-      type: Type.OBJECT,
-      properties: {
-        name: { type: Type.STRING, description: "The full, corrected name of the second device." },
-        pros: { type: Type.ARRAY, items: { type: Type.STRING }, description: "A list of 3-5 key pros for this device." },
-        cons: { type: Type.ARRAY, items: { type: Type.STRING }, description: "A list of 3-5 key cons for this device." },
-        rating: ratingSchema
-      },
-      required: ["name", "pros", "cons", "rating"]
-    }
-  },
-  required: ["detailedSummary", "winner", "winnerReason", "deviceOne", "deviceTwo"]
-};
+import type { ComparisonResult, ChatMessage } from '../types';
 
 export const getDeviceComparison = async (deviceOneName: string, deviceTwoName: string): Promise<ComparisonResult> => {
   try {
-    const prompt = `
-      You are a tech comparison expert. Compare the following two devices: "${deviceOneName}" and "${deviceTwoName}".
-      Provide a detailed analysis in JSON format based on the provided schema.
-      Your analysis should include:
-      1. A detailed summary including an overview, 2-3 key differences, and who each device is best for.
-      2. A clear winner and a short reason why. If it's a tie or subjective, explain why.
-      3. For each device:
-         - Its full, corrected name.
-         - A list of 3-5 key pros.
-         - A list of 3-5 key cons.
-         - A rating object with scores out of 10 (can be a float, e.g. 8.5) for: overall, performance, camera, battery, display, and value.
-      Keep pros and cons concise and to the point.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: comparisonSchema,
-      },
+    const response = await fetch('/api/compare', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ deviceOne: deviceOneName, deviceTwo: deviceTwoName }),
     });
 
-    const jsonString = response.text.trim();
-    return JSON.parse(jsonString) as ComparisonResult;
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to fetch comparison from server.");
+    }
+
+    return await response.json() as ComparisonResult;
   } catch (error) {
     console.error("Error fetching device comparison:", error);
-    throw new Error("Failed to get comparison data from AI. Please try again.");
+    throw new Error("Failed to get comparison data. Please try again.");
   }
 };
 
-export const startChatSession = (deviceOneName: string, deviceTwoName: string): Chat => {
-  const systemInstruction = `You are a helpful AI assistant specializing in tech device comparisons. 
-You have just provided an in-depth comparison between ${deviceOneName} and ${deviceTwoName}.
-The user will now ask follow-up questions based on this specific comparison. 
-Your answers should be concise, accurate, and directly related to the comparison context. 
-Do not introduce new topics unless asked. Base your knowledge on the information you used for the original comparison.`;
+export const getChatStreamReader = async (
+  history: ChatMessage[], 
+  message: string,
+  deviceOneName: string,
+  deviceTwoName: string
+): Promise<ReadableStreamDefaultReader<Uint8Array>> => {
+    const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ history, message, deviceOneName, deviceTwoName }),
+    });
 
-  return ai.chats.create({
-    model: 'gemini-2.5-flash',
-    config: {
-      systemInstruction,
-    },
-  });
+    if (!response.ok || !response.body) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to start chat stream.");
+    }
+
+    return response.body.getReader();
 };

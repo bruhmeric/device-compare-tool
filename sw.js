@@ -1,3 +1,4 @@
+
 const CACHE_NAME = 'device-duel-v1';
 
 self.addEventListener('install', event => {
@@ -15,7 +16,10 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET' || event.request.url.includes('generativelanguage')) {
+  const url = new URL(event.request.url);
+
+  // Don't cache API calls or generative language model calls.
+  if (event.request.method !== 'GET' || url.pathname.startsWith('/api/') || url.hostname.includes('generativelanguage')) {
     return;
   }
 
